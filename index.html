@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Laboratorio de modulaciones digitales</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f5f6fa;--card:#fff;--tx:#1b1f2a;--mut:#6b7385;--ln:#d9dde8;--ac:#2563eb;--ac2:#e11d74;--wv:#0f766e;--dg:#b45309;--hl:rgba(37,99,235,.14)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1118;--card:#171b26;--tx:#e6e9f2;--mut:#8b94a8;--ln:#2a3042;--ac:#5b9bff;--ac2:#ff5fa2;--wv:#34d399;--dg:#fbbf24;--hl:rgba(91,155,255,.18)}}
+:root[data-theme="dark"]{--bg:#0e1118;--card:#171b26;--tx:#e6e9f2;--mut:#8b94a8;--ln:#2a3042;--ac:#5b9bff;--ac2:#ff5fa2;--wv:#34d399;--dg:#fbbf24;--hl:rgba(91,155,255,.18)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;max-width:1150px;margin-inline:auto}
+h1{font-size:1.3rem;margin:0 0 12px}
+h2{font-size:.95rem;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:14px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+label{display:flex;flex-direction:column;font-size:.8rem;color:var(--mut);gap:4px}
+input,select,button{background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:8px 10px;font-size:.95rem;font-family:inherit}
+input[type=text]{font-family:ui-monospace,Menlo,monospace;min-width:min(100%,240px)}
+input[type=range]{padding:0;width:150px;accent-color:var(--ac)}
+button{cursor:pointer}button:hover{border-color:var(--ac)}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.info{font-size:.85rem;color:var(--mut);margin-top:10px;line-height:1.45}
+.scroll{overflow-x:auto}canvas{display:block}
+.grid{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:850px){.grid{grid-template-columns:1.5fr 1fr}}
+.map{font-family:ui-monospace,Menlo,monospace;font-size:.78rem;color:var(--mut);display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px}
+.map b{color:var(--ac2)}
+.stats{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px}
+.stat{background:var(--bg);border:1px solid var(--ln);border-radius:8px;padding:6px 12px;font-size:.8rem;color:var(--mut)}
+.stat b{display:block;font-size:1.1rem;color:var(--tx);font-family:ui-monospace,monospace}
+.dec{font-family:ui-monospace,Menlo,monospace;word-break:break-all;font-size:.9rem}
+.dec .e{color:#fff;background:var(--ac2);border-radius:3px;padding:0 1px}
+.tip{font-size:.75rem;color:var(--mut);margin-top:6px}
+</style>
+</head>
+<body>
+<h1>📡 Laboratorio de modulaciones digitales</h1>
+<div class="card">
+  <div class="row">
+    <label>Número binario <input id="bits" type="text" value="1011001011100100" inputmode="numeric" autocomplete="off"></label>
+    <label>…o texto (ASCII) <input id="txt" type="text" placeholder="Hola" style="min-width:120px;width:130px" autocomplete="off"></label>
+    <label>Modulación <select id="mod"></select></label>
+    <label>Código de línea (señal digital)
+      <select id="lc"><option value="nrz">NRZ-L</option><option value="rz">RZ</option><option value="man">Manchester</option><option value="nrzi">NRZ-I</option></select></label>
+    <label>Ciclos portadora / símbolo <input id="cyc" type="number" min="1" max="8" value="3" style="width:80px"></label>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <label>Ruido: <span id="snrv">sin ruido</span> <input id="snr" type="range" min="0" max="31" value="31"></label>
+    <button id="newn">🎲 Nuevo ruido</button>
+    <button id="rand">⚄ Bits aleatorios</button>
+    <button id="play">▶ Animar</button>
+  </div>
+  <div class="info" id="info"></div>
+</div>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>Señal digital (banda base) y señal modulada s(t)</h2>
+      <div class="scroll" id="wrap"><canvas id="dig"></canvas><canvas id="wave"></canvas></div>
+      <div class="tip">👆 Clic en un bit de la señal digital para invertirlo · clic en un símbolo de la onda para pasar al siguiente símbolo · pasa el ratón para resaltar.</div>
+    </div>
+    <div class="card">
+      <h2>Espectro de magnitud (cic./símbolo)</h2>
+      <canvas id="spec" style="width:100%"></canvas>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h2>Diagrama de constelación</h2>
+      <canvas id="const" style="width:100%"></canvas>
+      <div class="tip">Pasa el ratón por un punto para ver en qué símbolos aparece · clic = añade sus bits al mensaje.</div>
+      <div class="map" id="map"></div>
+    </div>
+    <div class="card">
+      <h2>Demodulación (decisión por distancia mínima)</h2>
+      <div class="stats"><div class="stat">BER<b id="ber">0</b></div><div class="stat">SER<b id="ser">0</b></div><div class="stat">Es/N0<b id="esn0">∞</b></div></div>
+      <div class="dec" id="dec"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const gInv=g=>{let n=0;for(;g;g>>=1)n^=g;return n};
+const MODS=[
+ {n:'2-ASK (OOK)',t:'ask',M:2},{n:'4-ASK',t:'ask',M:4},
+ {n:'2-FSK (BFSK)',t:'fsk',M:2},{n:'4-FSK',t:'fsk',M:4},
+ {n:'BPSK',t:'psk',M:2},{n:'QPSK',t:'psk',M:4,s:1},{n:'8-PSK',t:'psk',M:8},{n:'16-PSK',t:'psk',M:16},
+ {n:'16-QAM',t:'qam',M:16},{n:'64-QAM',t:'qam',M:64}];
+MODS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m.n;if(m.s)o.selected=true;$('mod').appendChild(o)});
+const INFO={ask:'ASK: la información va en la amplitud de la portadora.',fsk:'FSK: cada símbolo usa una frecuencia distinta (ortogonales). La constelación es una proyección de los ejes.',psk:'PSK: la información va en la fase; puntos sobre una circunferencia.',qam:'QAM: amplitud y fase combinadas (dos ASK en cuadratura), codificación Gray.'};
+const st={seed:1,hv:-1,hc:-1,play:-1,timer:null,L:{}};
+function h(n){n=(Math.imul(n|0,2654435761)+0x6D2B79F5)|0;let t=Math.imul(n^n>>>15,1|n);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}
+const gauss=n=>Math.sqrt(-2*Math.log(h(n*2+st.seed*7919)+1e-12))*Math.cos(2*Math.PI*h(n*2+1+st.seed*7919));
+function pts(m){
+  const M=m.M,k=Math.log2(M),a=[];
+  for(let v=0;v<M;v++){
+    let I=0,Q=0,f=0;
+    if(m.t==='ask')I=gInv(v)/(M-1);
+    else if(m.t==='psk'){const th=2*Math.PI*gInv(v)/M;I=Math.cos(th);Q=Math.sin(th)}
+    else if(m.t==='qam'){const L=Math.sqrt(M),hh=k/2,vi=v>>hh,vq=v&(L-1);I=(2*gInv(vi)-(L-1))/(L-1);Q=(2*gInv(vq)-(L-1))/(L-1)}
+    else{f=v;I=Math.cos(v*Math.PI/2);Q=Math.sin(v*Math.PI/2)}
+    a.push({v,I,Q,f,lab:v.toString(2).padStart(k,'0')});
+  }
+  if(m.t==='qam'){const mx=Math.max(...a.map(p=>Math.hypot(p.I,p.Q)));a.forEach(p=>{p.I/=mx;p.Q/=mx})}
+  return a;
+}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function setup(c,w,hh){const d=devicePixelRatio||1;c.width=w*d;c.height=hh*d;c.style.width=w+'px';c.style.height=hh+'px';const x=c.getContext('2d');x.setTransform(d,0,0,d,0,0);return x}
+function getFull(){const m=MODS[$('mod').value],k=Math.log2(m.M);let b=$('bits').value.replace(/[^01]/g,'')||'0';return{b,full:b+'0'.repeat((k-b.length%k)%k),pad:(k-b.length%k)%k}}
+function setBits(s){$('bits').value=s;draw()}
+function draw(){
+  const m=MODS[$('mod').value],k=Math.log2(m.M),P=pts(m);
+  $('bits').value=$('bits').value.replace(/[^01]/g,'');
+  const {full,pad}=getFull();
+  const idx=[];for(let i=0;i<full.length;i+=k)idx.push(parseInt(full.slice(i,i+k),2));
+  const n=idx.length,cyc=Math.max(1,Math.min(8,parseInt($('cyc').value)||3));
+  const sv=+$('snr').value,noisy=sv<31;
+  $('snrv').textContent=noisy?sv+' dB':'sin ruido';
+  const Es=m.t==='fsk'?1:P.reduce((s,p)=>s+p.I*p.I+p.Q*p.Q,0)/P.length;
+  const sig=noisy?Math.sqrt(Es/(2*Math.pow(10,sv/10))):0;
+  // símbolos con ruido
+  const S=idx.map((v,i)=>{const p=P[v];return{v,I:p.I+sig*gauss(i*2),Q:(m.t==='ask'?0:p.Q+sig*gauss(i*2+1)),f:p.f,lab:p.lab}});
+  // demodulación
+  const dec=S.map(s=>{let b=0,bd=1e9;P.forEach(p=>{const d=(p.I-s.I)**2+(p.Q-s.Q)**2;if(d<bd){bd=d;b=p.v}});return b});
+  let se=0,be=0,dh='';
+  dec.forEach((d,i)=>{const o=idx[i],ds=P[d].lab,os=P[o].lab;if(d!==o)se++;for(let j=0;j<k;j++){const bad=ds[j]!==os[j];if(bad)be++;dh+=bad?`<span class="e">${ds[j]}</span>`:ds[j]}dh+=' '});
+  $('ber').textContent=(be/(n*k)).toExponential(1).replace('e+0','e0');$('ber').textContent=(be/(n*k)).toFixed(3);
+  $('ser').textContent=(se/n).toFixed(3);$('esn0').textContent=noisy?sv+' dB':'∞';
+  $('dec').innerHTML=dh;
+  $('info').textContent=INFO[m.t]+` · ${k} bit(s)/símbolo · ${n} símbolo(s)`+(pad?` · +${pad} cero(s) de relleno`:'');
+  const cTx=css('--tx'),cMut=css('--mut'),cLn=css('--ln'),cAc=css('--ac'),cAc2=css('--ac2'),cWv=css('--wv'),cDg=css('--dg'),cHl=css('--hl');
+  // ----- bandas resaltadas
+  const act=i=>i===st.hv||(st.hc>=0&&idx[i]===st.hc)||i===st.play;
+  const wrap=$('wrap'),pps=Math.max(80,Math.floor((wrap.clientWidth-2)/n)),W=pps*n,bw=pps/k;
+  st.L={pps,bw,k,n,m,P,idx,full,W,sx:0};
+  const band=(x,H)=>{for(let i=0;i<n;i++)if(act(i)){x.fillStyle=cHl;x.fillRect(i*pps,0,pps,H)}};
+  // ----- digital
+  const HD=110,xd=setup($('dig'),W,HD),lc=$('lc').value;
+  band(xd,HD);
+  xd.strokeStyle=cLn;xd.lineWidth=1;xd.setLineDash([3,4]);
+  for(let i=0;i<=full.length;i++){xd.beginPath();xd.moveTo(i*bw,18);xd.lineTo(i*bw,HD);xd.stroke()}
+  xd.setLineDash([]);xd.beginPath();xd.moveTo(0,64);xd.lineTo(W,64);xd.stroke();
+  xd.fillStyle=cMut;xd.font='11px ui-monospace,monospace';xd.textAlign='center';
+  for(let i=0;i<full.length;i++)xd.fillText(full[i],i*bw+bw/2,12);
+  const Y=l=>64-l*34;let lvl=-1;const path=[];
+  for(let i=0;i<full.length;i++){const b=+full[i],x0=i*bw,x1=x0+bw,xm=x0+bw/2;let seg;
+    if(lc==='nrz')seg=[[x0,b?1:-1],[x1,b?1:-1]];
+    else if(lc==='rz')seg=b?[[x0,1],[xm,1],[xm,0],[x1,0]]:[[x0,0],[x1,0]];
+    else if(lc==='man')seg=b?[[x0,-1],[xm,-1],[xm,1],[x1,1]]:[[x0,1],[xm,1],[xm,-1],[x1,-1]];
+    else{if(b)lvl=-lvl;seg=[[x0,lvl],[x1,lvl]]}
+    seg.forEach(p=>path.push(p))}
+  xd.strokeStyle=cDg;xd.lineWidth=2;xd.beginPath();
+  path.forEach((p,i)=>{i?xd.lineTo(p[0],Y(p[1])):xd.moveTo(p[0],Y(p[1]))});xd.stroke();
+  // ----- onda modulada
+  const HW=230,mid=HW/2,amp=85,xw=setup($('wave'),W,HW);
+  band(xw,HW);
+  xw.strokeStyle=cLn;xw.lineWidth=1;xw.setLineDash([4,4]);
+  for(let i=0;i<=n;i++){xw.beginPath();xw.moveTo(i*pps,0);xw.lineTo(i*pps,HW);xw.stroke()}
+  xw.setLineDash([]);xw.beginPath();xw.moveTo(0,mid);xw.lineTo(W,mid);xw.stroke();
+  xw.fillStyle=cMut;xw.font='11px ui-monospace,monospace';xw.textAlign='center';
+  S.forEach((s,i)=>xw.fillText(s.lab,i*pps+pps/2,14));
+  xw.strokeStyle=cWv;xw.lineWidth=2;xw.beginPath();
+  const N=pps*2,w2=2*Math.PI;
+  S.forEach((s,i)=>{for(let q=0;q<=N;q++){const t=q/N;
+    let y=m.t==='fsk'?Math.cos(w2*(cyc+s.f)*t)+(noisy?sig*gauss(100000+i*N+q):0):s.I*Math.cos(w2*cyc*t)-s.Q*Math.sin(w2*cyc*t);
+    const X=i*pps+t*pps,Yy=mid-Math.max(-1.6,Math.min(1.6,y))*amp;(i===0&&q===0)?xw.moveTo(X,Yy):xw.lineTo(X,Yy)}});
+  xw.stroke();
+  // ----- espectro
+  const ns=Math.min(n,48),SPS=64,fmax=cyc+(m.t==='fsk'?m.M:0)+3,SW=Math.max(260,$('spec').parentElement.clientWidth-30),SH=140;
+  const xs=setup($('spec'),SW,SH),G=240,mag=[];let mx=1e-9;
+  const samp=[];for(let i=0;i<ns;i++)for(let q=0;q<SPS;q++){const t=q/SPS,s=S[i];const y=m.t==='fsk'?Math.cos(w2*(cyc+s.f)*t):s.I*Math.cos(w2*cyc*t)-s.Q*Math.sin(w2*cyc*t);samp.push(y*(0.5-0.5*Math.cos(w2*(i*SPS+q)/(ns*SPS))))}
+  for(let g=0;g<G;g++){const f=g/(G-1)*fmax;let re=0,im=0;for(let j=0;j<samp.length;j++){const a=w2*f*j/SPS;re+=samp[j]*Math.cos(a);im-=samp[j]*Math.sin(a)}const v=Math.hypot(re,im);mag.push(v);if(v>mx)mx=v}
+  xs.strokeStyle=cLn;xs.lineWidth=1;xs.beginPath();xs.moveTo(30,SH-22);xs.lineTo(SW-6,SH-22);xs.stroke();
+  xs.fillStyle=cMut;xs.font='10px system-ui';xs.textAlign='center';
+  for(let f=0;f<=fmax;f++){const X=30+f/fmax*(SW-36);xs.fillText(f,X,SH-8);xs.beginPath();xs.moveTo(X,SH-22);xs.lineTo(X,SH-18);xs.stroke()}
+  xs.strokeStyle=cAc;xs.lineWidth=2;xs.beginPath();
+  mag.forEach((v,g)=>{const X=30+g/(G-1)*(SW-36),Yy=SH-22-v/mx*(SH-38);g?xs.lineTo(X,Yy):xs.moveTo(X,Yy)});xs.stroke();
+  xs.fillStyle=cMut;xs.textAlign='left';xs.fillText('|S(f)| — portadora en f = '+cyc,34,12);
+  // ----- constelación
+  const CS=Math.max(240,Math.min(440,$('const').parentElement.clientWidth-30)),cx=CS/2,cy=CS/2,R=CS/2-28;
+  const q=setup($('const'),CS,CS);
+  q.strokeStyle=cLn;q.lineWidth=1;q.beginPath();q.moveTo(8,cy);q.lineTo(CS-8,cy);q.moveTo(cx,8);q.lineTo(cx,CS-8);q.stroke();
+  q.beginPath();q.arc(cx,cy,R,0,7);q.setLineDash([3,4]);q.stroke();q.setLineDash([]);
+  q.fillStyle=cMut;q.font='11px system-ui';q.textAlign='left';q.fillText('I',CS-14,cy-6);q.fillText('Q',cx+6,16);
+  const sc=m.t==='ask'?R*.8:R*.85,ox=m.t==='ask'?-R*.4:0;
+  const X=p=>cx+ox+p.I*sc,Yc=p=>cy-p.Q*sc;
+  st.L.cx={P,X,Yc};
+  // trayectoria
+  const lim=st.play>=0?st.play:n-1;
+  q.strokeStyle=cMut;q.globalAlpha=.35;q.lineWidth=1;q.beginPath();
+  for(let i=0;i<=lim&&i<n;i++){const p=P[idx[i]];i?q.lineTo(X(p),Yc(p)):q.moveTo(X(p),Yc(p))}q.stroke();q.globalAlpha=1;
+  const used=new Set(idx.slice(0,lim+1));
+  q.textAlign='center';q.font='10px ui-monospace,monospace';
+  P.forEach(p=>{const u=used.has(p.v),hh=st.hc===p.v;
+    q.fillStyle=u?cAc2:cAc;q.globalAlpha=u?1:.45;q.beginPath();q.arc(X(p),Yc(p),hh?9:u?6:4,0,7);q.fill();q.globalAlpha=1;
+    if(m.M<=16||u||hh){q.fillStyle=u?cTx:cMut;q.fillText(p.lab,X(p),Yc(p)-12)}});
+  if(noisy){q.fillStyle=cWv;q.globalAlpha=.7;S.forEach((s,i)=>{if(i>lim)return;q.beginPath();q.arc(cx+ox+s.I*sc,cy-s.Q*sc,3,0,7);q.fill()});q.globalAlpha=1}
+  $('map').innerHTML='<span>🔴 símbolos ideales usados'+(noisy?' · 🟢 recibidos con ruido':'')+'</span>'+(m.M<=8?P.map(p=>`<span><b>${p.lab}</b>→${m.t==='fsk'?'f'+p.f:'('+p.I.toFixed(2)+', '+p.Q.toFixed(2)+')'}</span>`).join(''):'');
+}
+// ---- interacción
+const pos=(e,c)=>{const r=c.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+$('wave').addEventListener('pointermove',e=>{const i=Math.floor(pos(e,$('wave'))[0]/st.L.pps);if(i!==st.hv){st.hv=i;draw()}});
+$('dig').addEventListener('pointermove',e=>{const i=Math.floor(pos(e,$('dig'))[0]/st.L.pps);if(i!==st.hv){st.hv=i;draw()}});
+['wave','dig'].forEach(id=>$(id).addEventListener('pointerleave',()=>{st.hv=-1;draw()}));
+$('dig').addEventListener('click',e=>{const L=st.L,i=Math.floor(pos(e,$('dig'))[0]/L.bw);if(i<0||i>=L.full.length)return;setBits(L.full.slice(0,i)+(L.full[i]==='1'?'0':'1')+L.full.slice(i+1))});
+$('wave').addEventListener('click',e=>{const L=st.L,i=Math.floor(pos(e,$('wave'))[0]/L.pps);if(i<0||i>=L.n)return;const v=(L.idx[i]+1)%L.m.M;setBits(L.full.slice(0,i*L.k)+v.toString(2).padStart(L.k,'0')+L.full.slice((i+1)*L.k))});
+function near(e){const c=st.L.cx,[x,y]=pos(e,$('const'));let b=-1,bd=18*18;c.P.forEach(p=>{const d=(c.X(p)-x)**2+(c.Yc(p)-y)**2;if(d<bd){bd=d;b=p.v}});return b}
+$('const').addEventListener('pointermove',e=>{const b=near(e);if(b!==st.hc){st.hc=b;draw()}});
+$('const').addEventListener('pointerleave',()=>{st.hc=-1;draw()});
+$('const').addEventListener('click',e=>{const b=near(e);if(b>=0)setBits($('bits').value+st.L.P[b].lab)});
+$('txt').addEventListener('input',()=>{const s=[...$('txt').value].map(c=>c.charCodeAt(0).toString(2).padStart(8,'0').slice(-8)).join('');if(s)setBits(s.slice(0,128))});
+$('rand').onclick=()=>{let s='';for(let i=0;i<16;i++)s+=Math.random()<.5?'0':'1';$('txt').value='';setBits(s)};
+$('newn').onclick=()=>{st.seed=Math.floor(Math.random()*1e6);draw()};
+$('play').onclick=()=>{
+  if(st.timer){clearInterval(st.timer);st.timer=null;st.play=-1;$('play').textContent='▶ Animar';$('play').classList.remove('on');draw();return}
+  st.play=0;$('play').textContent='⏹ Parar';$('play').classList.add('on');draw();
+  st.timer=setInterval(()=>{st.play++;if(st.play>=st.L.n){clearInterval(st.timer);st.timer=null;st.play=-1;$('play').textContent='▶ Animar';$('play').classList.remove('on')}draw()},550)};
+['bits','mod','cyc','snr','lc'].forEach(i=>$(i).addEventListener('input',draw));
+addEventListener('resize',draw);
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',draw);
+draw();
+</script>
+</body>
+</html>
